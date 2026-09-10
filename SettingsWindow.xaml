@@ -1,0 +1,87 @@
+<Window x:Class="TaskbarFolders.SettingsWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Taskbar Folders — Settings"
+        Height="520"
+        Width="560"
+        MinHeight="420"
+        MinWidth="480"
+        WindowStartupLocation="CenterScreen"
+        Background="#FFF5F5F5">
+  <DockPanel Margin="16">
+    <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
+      <Button Content="OK" Width="88" Height="28" Margin="0,0,8,0" IsDefault="True" Click="Ok_Click"/>
+      <Button Content="Cancel" Width="88" Height="28" IsCancel="True" Click="Cancel_Click"/>
+    </StackPanel>
+
+    <Grid>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="*"/>
+        <RowDefinition Height="Auto"/>
+        <RowDefinition Height="Auto"/>
+      </Grid.RowDefinitions>
+
+      <TextBlock Text="Pinned folders" FontSize="16" FontWeight="SemiBold" Margin="0,0,0,8"/>
+
+      <DockPanel Grid.Row="1" LastChildFill="True">
+        <StackPanel DockPanel.Dock="Right" Margin="12,0,0,0" Width="110">
+          <Button Content="Add…" Height="28" Margin="0,0,0,8" Click="Add_Click"/>
+          <Button Content="Remove" Height="28" Margin="0,0,0,8" Click="Remove_Click"/>
+          <Button Content="Move up" Height="28" Margin="0,0,0,8" Click="MoveUp_Click"/>
+          <Button Content="Move down" Height="28" Margin="0,0,0,8" Click="MoveDown_Click"/>
+          <Button Content="Rename…" Height="28" Click="Rename_Click"/>
+        </StackPanel>
+        <ListBox x:Name="FolderList"
+                 DisplayMemberPath="Name"
+                 BorderBrush="#FFCCCCCC"
+                 Background="White"/>
+      </DockPanel>
+
+      <GroupBox Grid.Row="2" Header="Options" Margin="0,16,0,0" Padding="10">
+        <StackPanel>
+          <CheckBox x:Name="StartWithWindows" Content="Start with Windows" Margin="0,0,0,8"/>
+          <CheckBox x:Name="ShowToolbar" Content="Show toolbar on the taskbar" Margin="0,0,0,8"/>
+          <CheckBox x:Name="ShowTrayIcon" Content="Show notification area icon" Margin="0,0,0,8"/>
+          <CheckBox x:Name="ShowHiddenFiles" Content="Show hidden files" Margin="0,0,0,8"/>
+          <CheckBox x:Name="ShowFileExtensions" Content="Show file extensions" Margin="0,0,0,8"/>
+          <CheckBox x:Name="ShowFolderNames" Content="Show folder names on the toolbar" Margin="0,0,0,12"/>
+
+          <Grid>
+            <Grid.ColumnDefinitions>
+              <ColumnDefinition Width="Auto"/>
+              <ColumnDefinition Width="*"/>
+              <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+              <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <TextBlock Text="Toolbar position:" VerticalAlignment="Center" Margin="0,0,12,8"/>
+            <ComboBox x:Name="Alignment" Grid.Column="1" Grid.ColumnSpan="2" Width="200" HorizontalAlignment="Left" Margin="0,0,0,8">
+              <ComboBoxItem Content="After task buttons"/>
+              <ComboBoxItem Content="Center of free space"/>
+              <ComboBoxItem Content="Before system tray"/>
+            </ComboBox>
+
+            <TextBlock Grid.Row="1" Text="Opacity:" VerticalAlignment="Center" Margin="0,0,12,8"/>
+            <Slider x:Name="OpacitySlider" Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1" TickFrequency="0.05"
+                    IsSnapToTickEnabled="True" Margin="0,0,8,8"/>
+            <TextBlock x:Name="OpacityLabel" Grid.Row="1" Grid.Column="2" VerticalAlignment="Center" Width="40" Margin="0,0,0,8"/>
+
+            <TextBlock Grid.Row="2" Text="Max items per menu:" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <TextBox x:Name="MaxItems" Grid.Row="2" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
+          </Grid>
+        </StackPanel>
+      </GroupBox>
+
+      <TextBlock Grid.Row="3"
+                 Margin="0,12,0,0"
+                 TextWrapping="Wrap"
+                 Foreground="#FF555555"
+                 Text="Tip: drag the dotted grip on the toolbar edge to resize it (like Windows 10). Right-click → Reset width to fit."/>
+    </Grid>
+  </DockPanel>
+</Window>
