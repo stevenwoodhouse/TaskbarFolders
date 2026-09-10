@@ -25,7 +25,7 @@
 
       <Border x:Name="LeftGrip"
               Grid.Column="0"
-              Background="#33FFFFFF"
+              Background="Transparent"
               Cursor="SizeWE"
               ToolTip="Drag to resize"
               MouseLeftButtonDown="Grip_MouseLeftButtonDown"
@@ -52,7 +52,7 @@
 
       <Border x:Name="RightGrip"
               Grid.Column="2"
-              Background="#33FFFFFF"
+              Background="Transparent"
               Cursor="SizeWE"
               ToolTip="Drag to resize"
               MouseLeftButtonDown="Grip_MouseLeftButtonDown"

@@ -28,6 +28,7 @@ public partial class MainWindow : Window
     private int _currentWidthPx;
     private Brush _foreground = Brushes.White;
     private Brush _mutedForeground = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA));
+    private bool? _appliedLightTheme;
 
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
@@ -63,9 +64,16 @@ public partial class MainWindow : Window
         UpdateGripLayout();
         RebuildButtons();
         _locator.TaskbarChanged += AttachAndPosition;
+        _locator.ThemeChanged += OnSystemThemeChanged;
         _locator.Start();
         AttachAndPosition();
         _placed = true;
+    }
+
+    private void OnSystemThemeChanged()
+    {
+        ApplyTheme(force: true);
+        RebuildButtons();
     }
 
     protected override void OnClosed(EventArgs e)
@@ -75,19 +83,25 @@ public partial class MainWindow : Window
         base.OnClosed(e);
     }
 
-    private void ApplyTheme()
+    private void ApplyTheme(bool force = false)
     {
         var light = NativeMethods.IsSystemLightTheme();
+        if (!force && _appliedLightTheme == light)
+            return;
+
+        _appliedLightTheme = light;
         _foreground = light ? Brushes.Black : Brushes.White;
         _mutedForeground = new SolidColorBrush(light
             ? Color.FromRgb(0x55, 0x55, 0x55)
             : Color.FromRgb(0xBB, 0xBB, 0xBB));
         _mutedForeground.Freeze();
 
-        var gripFill = light ? Color.FromArgb(0x33, 0, 0, 0) : Color.FromArgb(0x33, 255, 255, 255);
-        var dotFill = light ? Color.FromArgb(0x99, 0, 0, 0) : Color.FromArgb(0x99, 255, 255, 255);
-        LeftGrip.Background = new SolidColorBrush(gripFill);
-        RightGrip.Background = new SolidColorBrush(gripFill);
+        // Light taskbar → dark dots; dark taskbar → light dots.
+        var dotBrush = new SolidColorBrush(light
+            ? Color.FromArgb(0xB3, 0x22, 0x22, 0x22)
+            : Color.FromArgb(0xB3, 0xEE, 0xEE, 0xEE));
+        dotBrush.Freeze();
+
         foreach (var grip in new[] { LeftGrip, RightGrip })
         {
             if (grip.Child is Canvas canvas)
@@ -95,10 +109,25 @@ public partial class MainWindow : Window
                 foreach (var child in canvas.Children)
                 {
                     if (child is System.Windows.Shapes.Ellipse el)
-                        el.Fill = new SolidColorBrush(dotFill);
+                        el.Fill = dotBrush;
                 }
             }
         }
+
+        SetGripHighlight(active: _resizing);
+    }
+
+    private void SetGripHighlight(bool active)
+    {
+        var light = _appliedLightTheme ?? NativeMethods.IsSystemLightTheme();
+        Brush background = active
+            ? new SolidColorBrush(light
+                ? Color.FromArgb(0x33, 0, 0, 0)
+                : Color.FromArgb(0x33, 255, 255, 255))
+            : Brushes.Transparent;
+
+        LeftGrip.Background = background;
+        RightGrip.Background = background;
     }
 
     private void UpdateGripLayout()
@@ -273,6 +302,7 @@ public partial class MainWindow : Window
         _resizeFromLeft = ReferenceEquals(grip, LeftGrip);
         _resizeStartScreenX = PointToScreen(e.GetPosition(this)).X;
         _resizeStartWidthPx = _currentWidthPx > 0 ? _currentWidthPx : ResolveWidthPx();
+        SetGripHighlight(active: true);
         grip.CaptureMouse();
         e.Handled = true;
     }
@@ -313,6 +343,7 @@ public partial class MainWindow : Window
     {
         _resizing = false;
         grip?.ReleaseMouseCapture();
+        SetGripHighlight(active: false);
 
         _config.ToolbarWidthPx = _currentWidthPx;
         ConfigService.Save(_config);

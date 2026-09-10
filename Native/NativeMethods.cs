@@ -359,7 +359,8 @@ internal static class NativeMethods
         {
             using var key = Registry.CurrentUser.OpenSubKey(
                 @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
-            return key?.GetValue("SystemUsesLightTheme") is int i && i == 1;
+            var value = key?.GetValue("SystemUsesLightTheme");
+            return value != null && Convert.ToInt32(value) == 1;
         }
         catch
         {
