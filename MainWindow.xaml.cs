@@ -1,6 +1,5 @@
 ﻿using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
@@ -219,18 +218,43 @@ public partial class MainWindow : Window
         return button;
     }
 
+    private Forms.ContextMenuStrip? _openFolderMenu;
+    private string? _openFolderId;
+    private DateTime _folderMenuClosedAt;
+
     private void FolderButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is not System.Windows.Controls.Button button || button.Tag is not FolderEntry folder)
             return;
 
+        if (_openFolderMenu is { IsDisposed: false, Visible: true } && _openFolderId == folder.Id)
+        {
+            _openFolderMenu.Close();
+            return;
+        }
+
+        // Clicking the toolbar button dismisses the menu first, then raises Click — don't reopen.
+        if (_openFolderId == folder.Id && DateTime.UtcNow - _folderMenuClosedAt < TimeSpan.FromMilliseconds(300))
+            return;
+
+        if (_openFolderMenu is { IsDisposed: false, Visible: true })
+            _openFolderMenu.Close();
+
         var menu = FolderMenuBuilder.Build(folder, _config);
-        menu.PlacementTarget = button;
-        menu.Placement = PlacementMode.Top;
-        menu.HorizontalOffset = 0;
-        menu.VerticalOffset = -2;
-        button.ContextMenu = menu;
-        menu.IsOpen = true;
+        _openFolderMenu = menu;
+        _openFolderId = folder.Id;
+        menu.Closed += (_, _) =>
+        {
+            if (!ReferenceEquals(_openFolderMenu, menu))
+                return;
+            _openFolderMenu = null;
+            _folderMenuClosedAt = DateTime.UtcNow;
+        };
+
+        var screen = button.PointToScreen(new Point(0, 0));
+        menu.Show(
+            new System.Drawing.Point((int)Math.Round(screen.X), (int)Math.Round(screen.Y)),
+            Forms.ToolStripDropDownDirection.AboveRight);
     }
 
     private int MeasureContentWidthPx()
@@ -361,12 +385,15 @@ public partial class MainWindow : Window
 
     private void RootBorder_MouseRightButtonUp(object sender, MouseButtonEventArgs e)
     {
-        if (ContextMenu != null)
-        {
-            ContextMenu.PlacementTarget = this;
-            ContextMenu.IsOpen = true;
-            e.Handled = true;
-        }
+        e.Handled = true;
+        var menu = FolderMenuBuilder.CreateThemedStrip(showImageMargin: false);
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Add folder…", () => AddFolder_Click(this, e)));
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Settings…", () => Settings_Click(this, e)));
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Reset width to fit", () => ResetWidth_Click(this, e)));
+        menu.Items.Add(new Forms.ToolStripSeparator());
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Hide toolbar", () => HideToolbar_Click(this, e)));
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Exit", () => Exit_Click(this, e)));
+        menu.Show(Forms.Cursor.Position);
     }
 
     private void AddFolder_Click(object sender, RoutedEventArgs e)

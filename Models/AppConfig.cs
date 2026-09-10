@@ -8,7 +8,6 @@ public sealed class AppConfig
     public bool StartWithWindows { get; set; }
     public bool ShowToolbar { get; set; } = true;
     public bool ShowTrayIcon { get; set; } = true;
-    public double ToolbarOpacity { get; set; } = 0.92;
     public int MaxItemsPerMenu { get; set; } = 40;
     public bool ShowHiddenFiles { get; set; }
     public bool ShowFileExtensions { get; set; } = true;

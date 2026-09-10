@@ -1,5 +1,8 @@
 using System.Collections.ObjectModel;
 using System.Windows;
+using System.Windows.Controls;
+using System.Windows.Interop;
+using System.Windows.Media;
 using TaskbarFolders.Models;
 using TaskbarFolders.Services;
 using Forms = System.Windows.Forms;
@@ -28,12 +31,11 @@ public partial class SettingsWindow : Window
         ShowFileExtensions.IsChecked = _config.ShowFileExtensions;
         ShowFolderNames.IsChecked = _config.ShowFolderNames;
         Alignment.SelectedIndex = Math.Clamp(_config.ToolbarAlignment, 0, 2);
-        OpacitySlider.Value = Math.Clamp(_config.ToolbarOpacity, 0.4, 1.0);
-        OpacityLabel.Text = $"{OpacitySlider.Value:P0}";
         MaxItems.Text = _config.MaxItemsPerMenu.ToString();
 
-        OpacitySlider.ValueChanged += (_, _) =>
-            OpacityLabel.Text = $"{OpacitySlider.Value:P0}";
+        var theme = UiTheme.Current();
+        theme.ApplyToWindow(this);
+        SourceInitialized += (_, _) => theme.ApplyToWindow(this);
     }
 
     private void Add_Click(object sender, RoutedEventArgs e)
@@ -119,7 +121,6 @@ public partial class SettingsWindow : Window
         _config.ShowFileExtensions = ShowFileExtensions.IsChecked == true;
         _config.ShowFolderNames = ShowFolderNames.IsChecked == true;
         _config.ToolbarAlignment = Alignment.SelectedIndex;
-        _config.ToolbarOpacity = OpacitySlider.Value;
         _config.MaxItemsPerMenu = maxItems;
 
         ResultConfig = _config;
@@ -138,7 +139,6 @@ public partial class SettingsWindow : Window
         StartWithWindows = source.StartWithWindows,
         ShowToolbar = source.ShowToolbar,
         ShowTrayIcon = source.ShowTrayIcon,
-        ToolbarOpacity = source.ToolbarOpacity,
         MaxItemsPerMenu = source.MaxItemsPerMenu,
         ShowHiddenFiles = source.ShowHiddenFiles,
         ShowFileExtensions = source.ShowFileExtensions,
@@ -156,6 +156,7 @@ public partial class SettingsWindow : Window
 
     private string? Prompt(string message, string initial)
     {
+        var theme = UiTheme.Current();
         var dialog = new Window
         {
             Title = "Rename folder",
@@ -164,29 +165,42 @@ public partial class SettingsWindow : Window
             WindowStartupLocation = WindowStartupLocation.CenterOwner,
             Owner = this,
             ResizeMode = ResizeMode.NoResize,
-            Background = Background
+            Background = theme.WindowBrush,
+            Foreground = theme.TextBrush
         };
+        theme.ApplyToWindow(dialog);
+        dialog.SourceInitialized += (_, _) => theme.ApplyToWindow(dialog);
 
-        var box = new System.Windows.Controls.TextBox
+        var box = new TextBox
         {
             Text = initial,
-            Margin = new Thickness(16, 8, 16, 8)
+            Margin = new Thickness(16, 8, 16, 8),
+            Background = theme.ControlBrush,
+            Foreground = theme.TextBrush,
+            BorderBrush = theme.BorderBrush,
+            CaretBrush = theme.TextBrush
         };
 
-        var ok = new System.Windows.Controls.Button
+        var ok = new Button
         {
             Content = "OK",
             Width = 80,
             Height = 28,
             Margin = new Thickness(0, 0, 8, 0),
-            IsDefault = true
+            IsDefault = true,
+            Background = theme.ButtonBrush,
+            Foreground = theme.TextBrush,
+            BorderBrush = theme.BorderBrush
         };
-        var cancel = new System.Windows.Controls.Button
+        var cancel = new Button
         {
             Content = "Cancel",
             Width = 80,
             Height = 28,
-            IsCancel = true
+            IsCancel = true,
+            Background = theme.ButtonBrush,
+            Foreground = theme.TextBrush,
+            BorderBrush = theme.BorderBrush
         };
 
         string? result = null;
@@ -197,20 +211,21 @@ public partial class SettingsWindow : Window
             dialog.Close();
         };
 
-        var buttons = new System.Windows.Controls.StackPanel
+        var buttons = new StackPanel
         {
-            Orientation = System.Windows.Controls.Orientation.Horizontal,
-            HorizontalAlignment = System.Windows.HorizontalAlignment.Right,
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(16, 8, 16, 16)
         };
         buttons.Children.Add(ok);
         buttons.Children.Add(cancel);
 
-        var layout = new System.Windows.Controls.StackPanel();
-        layout.Children.Add(new System.Windows.Controls.TextBlock
+        var layout = new StackPanel();
+        layout.Children.Add(new TextBlock
         {
             Text = message,
-            Margin = new Thickness(16, 16, 16, 8)
+            Margin = new Thickness(16, 16, 16, 8),
+            Foreground = theme.TextBrush
         });
         layout.Children.Add(box);
         layout.Children.Add(buttons);

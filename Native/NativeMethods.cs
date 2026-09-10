@@ -353,6 +353,22 @@ internal static class NativeMethods
         }
     }
 
+    [DllImport("dwmapi.dll")]
+    public static extern int DwmSetWindowAttribute(IntPtr hwnd, int dwAttribute, ref int pvAttribute, int cbAttribute);
+
+    public const int DwmwaUseImmersiveDarkMode = 20;
+    public const int DwmwaUseImmersiveDarkModeBefore20H1 = 19;
+
+    public static void SetImmersiveDarkMode(IntPtr hwnd, bool dark)
+    {
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        var value = dark ? 1 : 0;
+        _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkMode, ref value, sizeof(int));
+        _ = DwmSetWindowAttribute(hwnd, DwmwaUseImmersiveDarkModeBefore20H1, ref value, sizeof(int));
+    }
+
     public static bool IsSystemLightTheme()
     {
         try

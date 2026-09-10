@@ -51,6 +51,43 @@ public static class IconService
         }
     }
 
+    public static Bitmap? GetBitmap(string path, bool isDirectory)
+    {
+        try
+        {
+            var info = new NativeMethods.ShFileInfo();
+            uint flags = NativeMethods.ShgfiIcon | NativeMethods.ShgfiSmallicon;
+            uint attrs = 0;
+
+            if (!File.Exists(path) && !Directory.Exists(path))
+            {
+                flags |= NativeMethods.ShgfiUsefileattributes;
+                attrs = isDirectory
+                    ? NativeMethods.FileAttributeDirectory
+                    : NativeMethods.FileAttributeNormal;
+            }
+
+            NativeMethods.SHGetFileInfo(path, attrs, ref info, (uint)Marshal.SizeOf<NativeMethods.ShFileInfo>(), flags);
+            if (info.hIcon == IntPtr.Zero)
+                return null;
+
+            try
+            {
+                var icon = Icon.FromHandle(info.hIcon);
+                using var bmp = icon.ToBitmap();
+                return new Bitmap(bmp, 16, 16);
+            }
+            finally
+            {
+                NativeMethods.DestroyIcon(info.hIcon);
+            }
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
     public static Icon? GetAppIcon()
     {
         try

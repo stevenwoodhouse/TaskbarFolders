@@ -102,61 +102,30 @@ public partial class App : System.Windows.Application
         if (_tray == null)
             return;
 
-        var menu = new Forms.ContextMenuStrip();
+        _tray.ContextMenuStrip?.Dispose();
+        var menu = FolderMenuBuilder.CreateThemedStrip(showImageMargin: false, disposeAfterClose: false);
 
         foreach (var folder in _config.Folders)
         {
-            var item = new Forms.ToolStripMenuItem(folder.Name);
-            item.Click += (_, _) => OpenFolderMenuFromTray(folder);
+            var item = FolderMenuBuilder.CreateCommandItem(folder.Name, () => OpenFolderMenuFromTray(folder));
             menu.Items.Add(item);
         }
 
         if (_config.Folders.Count > 0)
             menu.Items.Add(new Forms.ToolStripSeparator());
 
-        menu.Items.Add("Settings…", null, (_, _) => OpenSettings());
-        menu.Items.Add(_config.ShowToolbar ? "Hide toolbar" : "Show toolbar", null, (_, _) => ToggleToolbar());
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Settings…", OpenSettings));
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem(_config.ShowToolbar ? "Hide toolbar" : "Show toolbar", ToggleToolbar));
         menu.Items.Add(new Forms.ToolStripSeparator());
-        menu.Items.Add("Exit", null, (_, _) => ExitApp());
+        menu.Items.Add(FolderMenuBuilder.CreateCommandItem("Exit", ExitApp));
 
         _tray.ContextMenuStrip = menu;
     }
 
     private void OpenFolderMenuFromTray(FolderEntry folder)
     {
-        // Show a WPF menu at the cursor via a temporary invisible window.
         var menu = FolderMenuBuilder.Build(folder, _config);
-        var helper = new Window
-        {
-            WindowStyle = WindowStyle.None,
-            AllowsTransparency = true,
-            Background = System.Windows.Media.Brushes.Transparent,
-            ShowInTaskbar = false,
-            Width = 1,
-            Height = 1,
-            Left = Forms.Cursor.Position.X / GetDpiScale(),
-            Top = Forms.Cursor.Position.Y / GetDpiScale(),
-            Topmost = true
-        };
-        helper.Show();
-        menu.Closed += (_, _) => helper.Close();
-        menu.PlacementTarget = helper;
-        menu.Placement = System.Windows.Controls.Primitives.PlacementMode.MousePoint;
-        helper.ContextMenu = menu;
-        menu.IsOpen = true;
-    }
-
-    private static double GetDpiScale()
-    {
-        try
-        {
-            using var g = System.Drawing.Graphics.FromHwnd(IntPtr.Zero);
-            return g.DpiX / 96.0;
-        }
-        catch
-        {
-            return 1.0;
-        }
+        menu.Show(Forms.Cursor.Position);
     }
 
     private void ToggleToolbar()

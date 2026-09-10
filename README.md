@@ -11,7 +11,7 @@ Windows 10 let you unlock the taskbar and add a **New toolbar** pointing at a fo
 - Click a folder → cascading menu of files and subfolders (with icons)
 - Click a file to open it, or **Open folder** to launch Explorer
 - Notification-area icon with the same folders
-- Settings: add/remove/reorder folders, autostart, position, opacity
+- Settings: add/remove/reorder folders, autostart, position
 
 ## Requirements
 

@@ -7,7 +7,128 @@
         MinHeight="420"
         MinWidth="480"
         WindowStartupLocation="CenterScreen"
-        Background="#FFF5F5F5">
+        Background="{DynamicResource WindowBack}"
+        Foreground="{DynamicResource Text}">
+  <Window.Resources>
+    <SolidColorBrush x:Key="WindowBack" Color="#FFF3F3F3"/>
+    <SolidColorBrush x:Key="Text" Color="#FF202020"/>
+    <SolidColorBrush x:Key="Muted" Color="#FF8C8C8C"/>
+    <SolidColorBrush x:Key="ControlBack" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Border" Color="#FFDADADA"/>
+    <SolidColorBrush x:Key="Hot" Color="#FFE8E8E8"/>
+    <SolidColorBrush x:Key="ButtonBack" Color="#FFFBFBFB"/>
+
+    <Style TargetType="Button">
+      <Setter Property="Background" Value="{DynamicResource ButtonBack}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+      <Setter Property="BorderThickness" Value="1"/>
+      <Setter Property="Padding" Value="8,2"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border x:Name="Bd"
+                    Background="{TemplateBinding Background}"
+                    BorderBrush="{TemplateBinding BorderBrush}"
+                    BorderThickness="{TemplateBinding BorderThickness}"
+                    CornerRadius="4"
+                    Padding="{TemplateBinding Padding}">
+              <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hot}"/>
+              </Trigger>
+              <Trigger Property="IsPressed" Value="True">
+                <Setter TargetName="Bd" Property="Opacity" Value="0.85"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="CheckBox">
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+
+    <Style TargetType="TextBlock">
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+    </Style>
+
+    <Style TargetType="GroupBox">
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+      <Setter Property="Background" Value="Transparent"/>
+    </Style>
+
+    <Style TargetType="TextBox">
+      <Setter Property="Background" Value="{DynamicResource ControlBack}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+      <Setter Property="CaretBrush" Value="{DynamicResource Text}"/>
+    </Style>
+
+    <Style TargetType="ComboBox">
+      <Setter Property="Background" Value="{DynamicResource ControlBack}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+    </Style>
+
+    <Style TargetType="ComboBoxItem">
+      <Setter Property="Background" Value="White"/>
+      <Setter Property="Foreground" Value="Black"/>
+      <Setter Property="BorderThickness" Value="0"/>
+      <Setter Property="Padding" Value="6,4"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ComboBoxItem">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+              <ContentPresenter TextElement.Foreground="Black"/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsHighlighted" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#FFE8E8E8"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="#FFE8E8E8"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <Style TargetType="ListBox">
+      <Setter Property="Background" Value="{DynamicResource ControlBack}"/>
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="BorderBrush" Value="{DynamicResource Border}"/>
+    </Style>
+
+    <Style TargetType="ListBoxItem">
+      <Setter Property="Foreground" Value="{DynamicResource Text}"/>
+      <Setter Property="Background" Value="Transparent"/>
+      <Setter Property="Padding" Value="6,4"/>
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+              <ContentPresenter/>
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hot}"/>
+              </Trigger>
+              <Trigger Property="IsSelected" Value="True">
+                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource Hot}"/>
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </Window.Resources>
+
   <DockPanel Margin="16">
     <StackPanel DockPanel.Dock="Bottom" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,16,0,0">
       <Button Content="OK" Width="88" Height="28" Margin="0,0,8,0" IsDefault="True" Click="Ok_Click"/>
@@ -32,10 +153,7 @@
           <Button Content="Move down" Height="28" Margin="0,0,0,8" Click="MoveDown_Click"/>
           <Button Content="Rename…" Height="28" Click="Rename_Click"/>
         </StackPanel>
-        <ListBox x:Name="FolderList"
-                 DisplayMemberPath="Name"
-                 BorderBrush="#FFCCCCCC"
-                 Background="White"/>
+        <ListBox x:Name="FolderList" DisplayMemberPath="Name"/>
       </DockPanel>
 
       <GroupBox Grid.Row="2" Header="Options" Margin="0,16,0,0" Padding="10">
@@ -51,36 +169,30 @@
             <Grid.ColumnDefinitions>
               <ColumnDefinition Width="Auto"/>
               <ColumnDefinition Width="*"/>
-              <ColumnDefinition Width="Auto"/>
             </Grid.ColumnDefinitions>
             <Grid.RowDefinitions>
-              <RowDefinition Height="Auto"/>
               <RowDefinition Height="Auto"/>
               <RowDefinition Height="Auto"/>
             </Grid.RowDefinitions>
 
             <TextBlock Text="Toolbar position:" VerticalAlignment="Center" Margin="0,0,12,8"/>
-            <ComboBox x:Name="Alignment" Grid.Column="1" Grid.ColumnSpan="2" Width="200" HorizontalAlignment="Left" Margin="0,0,0,8">
+            <ComboBox x:Name="Alignment" Grid.Column="1" Width="200" HorizontalAlignment="Left" Margin="0,0,0,8">
               <ComboBoxItem Content="After task buttons"/>
               <ComboBoxItem Content="Center of free space"/>
               <ComboBoxItem Content="Before system tray"/>
             </ComboBox>
 
-            <TextBlock Grid.Row="1" Text="Opacity:" VerticalAlignment="Center" Margin="0,0,12,8"/>
-            <Slider x:Name="OpacitySlider" Grid.Row="1" Grid.Column="1" Minimum="0.4" Maximum="1" TickFrequency="0.05"
-                    IsSnapToTickEnabled="True" Margin="0,0,8,8"/>
-            <TextBlock x:Name="OpacityLabel" Grid.Row="1" Grid.Column="2" VerticalAlignment="Center" Width="40" Margin="0,0,0,8"/>
-
-            <TextBlock Grid.Row="2" Text="Max items per menu:" VerticalAlignment="Center" Margin="0,0,12,0"/>
-            <TextBox x:Name="MaxItems" Grid.Row="2" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
+            <TextBlock Grid.Row="1" Text="Max items per menu:" VerticalAlignment="Center" Margin="0,0,12,0"/>
+            <TextBox x:Name="MaxItems" Grid.Row="1" Grid.Column="1" Width="80" HorizontalAlignment="Left"/>
           </Grid>
         </StackPanel>
       </GroupBox>
 
-      <TextBlock Grid.Row="3"
+      <TextBlock x:Name="TipText"
+                 Grid.Row="3"
                  Margin="0,12,0,0"
                  TextWrapping="Wrap"
-                 Foreground="#FF555555"
+                 Foreground="{DynamicResource Muted}"
                  Text="Tip: drag the dotted grip on the toolbar edge to resize it (like Windows 10). Right-click → Reset width to fit."/>
     </Grid>
   </DockPanel>
