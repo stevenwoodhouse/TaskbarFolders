@@ -1,5 +1,7 @@
 ﻿using System.Windows;
+using System.Windows.Threading;
 using TaskbarFolders.Models;
+using TaskbarFolders.Native;
 using TaskbarFolders.Services;
 using Forms = System.Windows.Forms;
 
@@ -11,6 +13,8 @@ public partial class App : System.Windows.Application
     private MainWindow? _toolbar;
     private Forms.NotifyIcon? _tray;
     private SettingsWindow? _settingsWindow;
+    private DispatcherTimer? _toolbarWaitTimer;
+    private int _toolbarWaitAttempts;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -19,8 +23,8 @@ public partial class App : System.Windows.Application
         _config = ConfigService.Load();
         AutostartService.SetEnabled(_config.StartWithWindows);
 
-        ShowToolbar();
         UpdateTrayIcon();
+        ShowToolbar();
 
         if (!_config.ShowToolbar && !_config.ShowTrayIcon)
         {
@@ -32,12 +36,50 @@ public partial class App : System.Windows.Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _toolbarWaitTimer?.Stop();
+        _toolbarWaitTimer = null;
         _tray?.Dispose();
         _toolbar?.Close();
         base.OnExit(e);
     }
 
     private void ShowToolbar()
+    {
+        if (_toolbar != null)
+        {
+            _toolbar.ApplyConfig(_config);
+            return;
+        }
+
+        // At logon the Run key can start us before Explorer finishes the taskbar.
+        // Showing then registers a normal app button on the right of the taskbar.
+        if (!NativeMethods.IsTaskbarReady())
+        {
+            if (_toolbarWaitTimer == null)
+            {
+                _toolbarWaitAttempts = 0;
+                _toolbarWaitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                _toolbarWaitTimer.Tick += OnToolbarWaitTick;
+                _toolbarWaitTimer.Start();
+            }
+            return;
+        }
+
+        CreateAndShowToolbar();
+    }
+
+    private void OnToolbarWaitTick(object? sender, EventArgs e)
+    {
+        _toolbarWaitAttempts++;
+        if (!NativeMethods.IsTaskbarReady() && _toolbarWaitAttempts < 120)
+            return;
+
+        _toolbarWaitTimer?.Stop();
+        _toolbarWaitTimer = null;
+        CreateAndShowToolbar();
+    }
+
+    private void CreateAndShowToolbar()
     {
         if (_toolbar != null)
         {

@@ -26,6 +26,7 @@ internal static class NativeMethods
     public const int WsExNoactivate = 0x08000000;
     public const int WsExTopmost = 0x00000008;
     public const int WsExLayered = 0x00080000;
+    public const int WsExAppwindow = 0x00040000;
 
     public const uint SwpNosize = 0x0001;
     public const uint SwpNomove = 0x0002;
@@ -69,6 +70,17 @@ internal static class NativeMethods
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr GetParent(IntPtr hWnd);
 
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetWindow(IntPtr hWnd, uint uCmd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern bool SetWindowText(IntPtr hWnd, string lpString);
+
+    public const uint GwHwndNext = 2;
+    public const uint GwOwner = 4;
+    public const uint GwChild = 5;
+    public static readonly IntPtr HwndTop = IntPtr.Zero;
+
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
 
@@ -81,6 +93,14 @@ internal static class NativeMethods
 
     [DllImport("user32.dll")]
     public static extern bool IsWindow(IntPtr hWnd);
+
+    [DllImport("user32.dll")]
+    public static extern uint GetDpiForWindow(IntPtr hwnd);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    public static extern uint RegisterWindowMessage(string lpString);
+
+    public static readonly uint WmTaskbarCreated = RegisterWindowMessage("TaskbarCreated");
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern IntPtr SendMessage(IntPtr hWnd, uint msg, IntPtr wParam, IntPtr lParam);
@@ -162,6 +182,17 @@ internal static class NativeMethods
 
     public static IntPtr GetTaskbarHwnd() => FindWindow("Shell_TrayWnd", null);
 
+    public static bool IsTaskbarReady()
+    {
+        var tray = GetTaskbarHwnd();
+        if (tray == IntPtr.Zero || !IsWindow(tray))
+            return false;
+
+        // Notify area is one of the last pieces Explorer creates at logon.
+        var notify = FindWindowEx(tray, IntPtr.Zero, "TrayNotifyWnd", null);
+        return notify != IntPtr.Zero;
+    }
+
     public static IntPtr FindChildByClass(IntPtr parent, string className)
     {
         IntPtr found = IntPtr.Zero;
@@ -191,8 +222,8 @@ internal static class NativeMethods
         SetWindowLong(hwnd, GwlStyle, style);
 
         var ex = GetWindowLong(hwnd, GwlExstyle);
-        ex |= WsExToolwindow | WsExNoactivate | WsExLayered;
-        ex &= ~WsExTopmost;
+        ex |= WsExToolwindow | WsExNoactivate;
+        ex &= ~(WsExTopmost | WsExAppwindow);
         SetWindowLong(hwnd, GwlExstyle, ex);
 
         SetWindowPos(hwnd, IntPtr.Zero, 0, 0, 0, 0,
@@ -244,6 +275,8 @@ internal static class NativeMethods
         RectNative? rebar = rebarHwnd != IntPtr.Zero ? ToClientRect(tray, rebarHwnd) : null;
         RectNative? taskband = taskHwnd != IntPtr.Zero ? ToClientRect(tray, taskHwnd) : null;
         RectNative? notify = notifyHwnd != IntPtr.Zero ? ToClientRect(tray, notifyHwnd) : null;
+        if (notify is { Width: < 16 })
+            notify = null;
 
         var edge = TaskbarEdge.Bottom;
         if (trayScreen.Top <= 2 && trayScreen.Height < trayScreen.Width)
@@ -275,11 +308,82 @@ internal static class NativeMethods
         PrepareChildWindow(window);
         var hwnd = new WindowInteropHelper(window).Handle;
         SetParent(hwnd, tray);
+        SetWindowText(hwnd, "");
+        HideFromAppTaskbar(hwnd);
+        HideOwnerFromTaskbar(hwnd);
+        BringAboveTaskbarXaml(hwnd);
         return GetParent(hwnd) == tray;
     }
 
-    public static void PositionChild(IntPtr hwnd, int x, int y, int width, int height) =>
-        SetWindowPos(hwnd, IntPtr.Zero, x, y, width, height, SwpNoactivate | SwpShowwindow | SwpNozorder);
+    public static bool HasXamlTaskbar(IntPtr tray)
+    {
+        if (tray == IntPtr.Zero)
+            return false;
+        return FindWindowEx(tray, IntPtr.Zero, "Windows.UI.Composition.DesktopWindowContentBridge", null) != IntPtr.Zero;
+    }
+
+    public static void BringAboveTaskbarXaml(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        SetWindowPos(hwnd, HwndTop, 0, 0, 0, 0,
+            SwpNomove | SwpNosize | SwpNoactivate | SwpShowwindow);
+    }
+
+    public static void HideFromAppTaskbar(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+            return;
+
+        try
+        {
+            var list = (ITaskbarList)new CTaskbarList();
+            list.HrInit();
+            list.DeleteTab(hwnd);
+        }
+        catch
+        {
+            // Best-effort: Explorer may not be ready yet.
+        }
+    }
+
+    public static void HideOwnerFromTaskbar(IntPtr hwnd)
+    {
+        var owner = GetWindow(hwnd, GwOwner);
+        if (owner == IntPtr.Zero)
+            return;
+
+        var ex = GetWindowLong(owner, GwlExstyle);
+        ex |= WsExToolwindow;
+        ex &= ~WsExAppwindow;
+        SetWindowLong(owner, GwlExstyle, ex);
+        HideFromAppTaskbar(owner);
+    }
+
+    [ComImport]
+    [Guid("56FDF342-FD6D-11d0-958A-006097C9A090")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface ITaskbarList
+    {
+        void HrInit();
+        void AddTab(IntPtr hwnd);
+        void DeleteTab(IntPtr hwnd);
+        void ActivateTab(IntPtr hwnd);
+        void SetActiveAlt(IntPtr hwnd);
+    }
+
+    [ComImport]
+    [Guid("56FDF344-FD6D-11d0-958A-006097C9A090")]
+    private class CTaskbarList
+    {
+    }
+
+    public static void PositionChild(IntPtr hwnd, int x, int y, int width, int height)
+    {
+        // HWND_TOP so we paint above Win11's full-width XAML taskbar island.
+        SetWindowPos(hwnd, HwndTop, x, y, width, height, SwpNoactivate | SwpShowwindow);
+    }
 
     /// <summary>
     /// Carve a dedicated strip for the toolbar (like a Win10 taskbar toolbar) and
@@ -292,26 +396,32 @@ internal static class NativeMethods
 
         var notifyLeft = slots.Notify?.Left ?? slots.TrayClient.Width - 8;
         var taskLeft = slots.Taskband?.Left ?? slots.Rebar?.Left ?? 55;
-        var height = Math.Max(slots.TrayClient.Height, 40);
-
         const int pad = 8;
-        var minTaskWidth = 160;
 
         // Dedicated strip immediately left of the system tray (classic toolbar side).
         var stripRight = notifyLeft - pad;
         var stripLeft = stripRight - toolbarWidthPx;
 
-        // Task buttons keep everything to the left of that strip.
-        var desiredTaskWidth = Math.Max(minTaskWidth, stripLeft - pad - taskLeft);
-        if (slots.TaskHwnd != IntPtr.Zero || slots.RebarHwnd != IntPtr.Zero)
-            ResizeTaskband(slots, desiredTaskWidth, height);
+        int taskRight;
+        if (HasXamlTaskbar(slots.TrayHwnd))
+        {
+            // Win11 XAML taskbar ignores ReBar size; shrinking it does not make a gap.
+            taskRight = 55;
+        }
+        else
+        {
+            var height = Math.Max(slots.TrayClient.Height, 40);
+            var minTaskWidth = 160;
+            var desiredTaskWidth = Math.Max(minTaskWidth, stripLeft - pad - taskLeft);
+            if (slots.TaskHwnd != IntPtr.Zero || slots.RebarHwnd != IntPtr.Zero)
+                ResizeTaskband(slots, desiredTaskWidth, height);
 
-        // Re-read after resize so placement matches reality.
-        slots = GetTaskbarSlots();
-        notifyLeft = slots.Notify?.Left ?? notifyLeft;
-        var taskRight = slots.Taskband?.Right ?? slots.Rebar?.Right ?? (taskLeft + desiredTaskWidth);
-        stripRight = notifyLeft - pad;
-        stripLeft = Math.Max(taskRight + pad, stripRight - toolbarWidthPx);
+            slots = GetTaskbarSlots();
+            notifyLeft = slots.Notify?.Left ?? notifyLeft;
+            taskRight = slots.Taskband?.Right ?? slots.Rebar?.Right ?? (taskLeft + desiredTaskWidth);
+            stripRight = notifyLeft - pad;
+            stripLeft = Math.Max(taskRight + pad, stripRight - toolbarWidthPx);
+        }
 
         var freeLeft = taskRight + pad;
         var freeRight = notifyLeft - pad;
@@ -394,6 +504,22 @@ internal static class NativeMethods
         catch
         {
             return 1.0;
+        }
+    }
+
+    public static double GetDpiScale(IntPtr hwnd)
+    {
+        if (hwnd == IntPtr.Zero)
+            return GetDpiScale();
+
+        try
+        {
+            var dpi = GetDpiForWindow(hwnd);
+            return dpi > 0 ? dpi / 96.0 : GetDpiScale();
+        }
+        catch
+        {
+            return GetDpiScale();
         }
     }
 }

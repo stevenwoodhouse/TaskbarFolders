@@ -1,7 +1,7 @@
 ﻿<Window x:Class="TaskbarFolders.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="Taskbar Folders"
+        Title=""
         WindowStyle="None"
         AllowsTransparency="True"
         Background="Transparent"

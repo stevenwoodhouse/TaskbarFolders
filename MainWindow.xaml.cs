@@ -1,8 +1,10 @@
 ﻿using System.Windows;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Threading;
 using TaskbarFolders.Models;
 using TaskbarFolders.Native;
 using TaskbarFolders.Services;
@@ -28,6 +30,9 @@ public partial class MainWindow : Window
     private Brush _foreground = Brushes.White;
     private Brush _mutedForeground = new SolidColorBrush(Color.FromRgb(0xAA, 0xAA, 0xAA));
     private bool? _appliedLightTheme;
+    private DispatcherTimer? _embedRetry;
+    private HwndSource? _hwndSource;
+    private HwndSourceHook? _wndHook;
 
     public event Action? SettingsRequested;
     public event Action? ExitRequested;
@@ -41,9 +46,14 @@ public partial class MainWindow : Window
         Loaded += OnLoaded;
         SourceInitialized += (_, _) =>
         {
-            new WindowInteropHelper(this).EnsureHandle();
+            var helper = new WindowInteropHelper(this);
+            helper.EnsureHandle();
             NativeMethods.PrepareChildWindow(this);
             NativeMethods.CleanupStaleRebarBands();
+            NativeMethods.HideFromAppTaskbar(helper.Handle);
+            _hwndSource = HwndSource.FromHwnd(helper.Handle);
+            _wndHook = WndProc;
+            _hwndSource?.AddHook(_wndHook);
         };
     }
 
@@ -65,8 +75,35 @@ public partial class MainWindow : Window
         _locator.TaskbarChanged += AttachAndPosition;
         _locator.ThemeChanged += OnSystemThemeChanged;
         _locator.Start();
-        AttachAndPosition();
         _placed = true;
+        StartEmbedRetry();
+        AttachAndPosition();
+    }
+
+    private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
+    {
+        if (msg == (int)NativeMethods.WmTaskbarCreated)
+        {
+            _embedded = false;
+            StartEmbedRetry();
+            AttachAndPosition();
+        }
+
+        return IntPtr.Zero;
+    }
+
+    protected override AutomationPeer OnCreateAutomationPeer() => new ToolbarAutomationPeer(this);
+
+    private sealed class ToolbarAutomationPeer : FrameworkElementAutomationPeer
+    {
+        public ToolbarAutomationPeer(MainWindow owner) : base(owner) { }
+
+        protected override string GetClassNameCore() => "TaskbarFoldersToolbar";
+        protected override string GetNameCore() => "";
+        protected override AutomationControlType GetAutomationControlTypeCore() => AutomationControlType.Pane;
+        protected override bool IsControlElementCore() => false;
+        protected override bool IsContentElementCore() => false;
+        protected override List<AutomationPeer> GetChildrenCore() => [];
     }
 
     private void OnSystemThemeChanged()
@@ -77,6 +114,9 @@ public partial class MainWindow : Window
 
     protected override void OnClosed(EventArgs e)
     {
+        StopEmbedRetry();
+        if (_hwndSource != null && _wndHook != null)
+            _hwndSource.RemoveHook(_wndHook);
         _locator.Stop();
         NativeMethods.CleanupStaleRebarBands();
         base.OnClosed(e);
@@ -94,6 +134,9 @@ public partial class MainWindow : Window
             ? Color.FromRgb(0x55, 0x55, 0x55)
             : Color.FromRgb(0xBB, 0xBB, 0xBB));
         _mutedForeground.Freeze();
+
+        Background = Brushes.Transparent;
+        RootBorder.Background = Brushes.Transparent;
 
         // Light taskbar → dark dots; dark taskbar → light dots.
         var dotBrush = new SolidColorBrush(light
@@ -259,7 +302,7 @@ public partial class MainWindow : Window
 
     private int MeasureContentWidthPx()
     {
-        var dpi = NativeMethods.GetDpiScale();
+        var dpi = NativeMethods.GetDpiScale(new WindowInteropHelper(this).Handle);
         FolderButtons.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         var grips = 0;
         if (LeftGrip.Visibility == Visibility.Visible) grips += GripWidthPx;
@@ -282,20 +325,57 @@ public partial class MainWindow : Window
             return;
         if (!_placed && !IsLoaded)
             return;
-        if (Visibility != Visibility.Visible)
+        if (!_config.ShowToolbar)
             return;
 
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == IntPtr.Zero)
             return;
 
-        if (!_embedded || NativeMethods.GetParent(hwnd) != NativeMethods.GetTaskbarHwnd())
-            _embedded = NativeMethods.TryEmbedInTaskbar(this);
+        ShowInTaskbar = false;
+        Title = "";
+        var tray = NativeMethods.GetTaskbarHwnd();
+        if (!_embedded || tray == IntPtr.Zero || NativeMethods.GetParent(hwnd) != tray)
+        {
+            _embedded = NativeMethods.IsTaskbarReady() && NativeMethods.TryEmbedInTaskbar(this);
+            if (!_embedded)
+            {
+                NativeMethods.HideFromAppTaskbar(hwnd);
+                NativeMethods.SetWindowPos(hwnd, IntPtr.Zero, -32000, -32000, 1, 1,
+                    NativeMethods.SwpNoactivate | NativeMethods.SwpNozorder);
+                StartEmbedRetry();
+                return;
+            }
+        }
+        else
+        {
+            NativeMethods.PrepareChildWindow(this);
+            NativeMethods.SetWindowText(hwnd, "");
+            NativeMethods.HideFromAppTaskbar(hwnd);
+            NativeMethods.HideOwnerFromTaskbar(hwnd);
+        }
 
+        StopEmbedRetry();
         UpdateGripLayout();
         var widthPx = ResolveWidthPx();
         _currentWidthPx = widthPx;
         ApplyWindowSize(widthPx);
+    }
+
+    private void StartEmbedRetry()
+    {
+        if (_embedRetry != null)
+            return;
+
+        _embedRetry = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };
+        _embedRetry.Tick += (_, _) => AttachAndPosition();
+        _embedRetry.Start();
+    }
+
+    private void StopEmbedRetry()
+    {
+        _embedRetry?.Stop();
+        _embedRetry = null;
     }
 
     private void ApplyWindowSize(int widthPx)
@@ -306,12 +386,15 @@ public partial class MainWindow : Window
 
         var slots = NativeMethods.GetTaskbarSlots();
         var heightPx = Math.Max(slots.TrayClient.Height, 40);
-        var maxWidth = Math.Max(MinWidthPx, (slots.Notify?.Left ?? slots.TrayClient.Width) - 80);
+        var trayLeft = TaskbarLayout.TryGetSystemTrayLeft(slots.TrayHwnd, out var uiaTrayLeft)
+            ? uiaTrayLeft
+            : slots.Notify?.Left ?? slots.TrayClient.Width;
+        var maxWidth = Math.Max(MinWidthPx, trayLeft - 16);
         widthPx = Math.Clamp(widthPx, MinWidthPx, maxWidth);
         _currentWidthPx = widthPx;
 
-        var offsetPx = (int)(_config.ToolbarOffsetX * NativeMethods.GetDpiScale());
-        var x = NativeMethods.ReserveToolbarSlot(slots, widthPx, _config.ToolbarAlignment, offsetPx);
+        var offsetPx = (int)(_config.ToolbarOffsetX * NativeMethods.GetDpiScale(hwnd));
+        var x = TaskbarLayout.ReserveToolbarSlot(slots, widthPx, _config.ToolbarAlignment, offsetPx);
 
         Topmost = false;
         NativeMethods.PositionChild(hwnd, x, 0, widthPx, heightPx);
