@@ -15,6 +15,8 @@ public partial class App : System.Windows.Application
     private SettingsWindow? _settingsWindow;
     private DispatcherTimer? _toolbarWaitTimer;
     private int _toolbarWaitAttempts;
+    private ShellMessageWindow? _shellMessages;
+    private bool _exiting;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -22,6 +24,10 @@ public partial class App : System.Windows.Application
 
         _config = ConfigService.Load();
         AutostartService.SetEnabled(_config.StartWithWindows);
+
+        _shellMessages = new ShellMessageWindow();
+        _shellMessages.TaskbarCreated += OnTaskbarCreated;
+        _shellMessages.ThemeChanged += OnOsThemeChanged;
 
         UpdateTrayIcon();
         ShowToolbar();
@@ -38,6 +44,8 @@ public partial class App : System.Windows.Application
     {
         _toolbarWaitTimer?.Stop();
         _toolbarWaitTimer = null;
+        _shellMessages?.Dispose();
+        _shellMessages = null;
         _tray?.Dispose();
         _toolbar?.Close();
         base.OnExit(e);
@@ -58,7 +66,7 @@ public partial class App : System.Windows.Application
             if (_toolbarWaitTimer == null)
             {
                 _toolbarWaitAttempts = 0;
-                _toolbarWaitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
+                _toolbarWaitTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(50) };
                 _toolbarWaitTimer.Tick += OnToolbarWaitTick;
                 _toolbarWaitTimer.Start();
             }
@@ -71,7 +79,7 @@ public partial class App : System.Windows.Application
     private void OnToolbarWaitTick(object? sender, EventArgs e)
     {
         _toolbarWaitAttempts++;
-        if (!NativeMethods.IsTaskbarReady() && _toolbarWaitAttempts < 120)
+        if (!NativeMethods.IsTaskbarReady() && _toolbarWaitAttempts < 200)
             return;
 
         _toolbarWaitTimer?.Stop();
@@ -91,6 +99,7 @@ public partial class App : System.Windows.Application
         _toolbar.SettingsRequested += OpenSettings;
         _toolbar.ExitRequested += ExitApp;
         _toolbar.HideToolbarRequested += HideToolbar;
+        _toolbar.Closed += OnToolbarClosed;
         _toolbar.ConfigChanged += () =>
         {
             _config = ConfigService.Load();
@@ -98,6 +107,34 @@ public partial class App : System.Windows.Application
         };
         _toolbar.ApplyConfig(_config);
         _toolbar.Show();
+    }
+
+    private void OnToolbarClosed(object? sender, EventArgs e)
+    {
+        if (ReferenceEquals(_toolbar, sender))
+            _toolbar = null;
+    }
+
+    private void OnTaskbarCreated()
+    {
+        if (_exiting)
+            return;
+
+        _toolbarWaitTimer?.Stop();
+        _toolbarWaitTimer = null;
+        TaskbarLayout.Invalidate();
+        if (_toolbar != null)
+            _toolbar.ReattachToTaskbar();
+        else
+            ShowToolbar();
+
+        UpdateTrayIcon();
+    }
+
+    private void OnOsThemeChanged()
+    {
+        _toolbar?.ApplySystemTheme();
+        UpdateTrayMenu();
     }
 
     private void HideToolbar()
@@ -211,8 +248,12 @@ public partial class App : System.Windows.Application
 
     private void ExitApp()
     {
+        _exiting = true;
+        _shellMessages?.Dispose();
+        _shellMessages = null;
         _tray?.Dispose();
         _tray = null;
+        _toolbar?.Close();
         Shutdown();
     }
 }

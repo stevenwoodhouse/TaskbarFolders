@@ -49,7 +49,6 @@ public partial class MainWindow : Window
             var helper = new WindowInteropHelper(this);
             helper.EnsureHandle();
             NativeMethods.PrepareChildWindow(this);
-            NativeMethods.CleanupStaleRebarBands();
             NativeMethods.HideFromAppTaskbar(helper.Handle);
             _hwndSource = HwndSource.FromHwnd(helper.Handle);
             _wndHook = WndProc;
@@ -60,7 +59,10 @@ public partial class MainWindow : Window
     public void ApplyConfig(AppConfig config)
     {
         _config = config;
-        Visibility = config.ShowToolbar ? Visibility.Visible : Visibility.Collapsed;
+        if (!config.ShowToolbar)
+            Visibility = Visibility.Collapsed;
+        else if (!_embedded)
+            Visibility = Visibility.Hidden;
         ApplyTheme();
         UpdateGripLayout();
         RebuildButtons();
@@ -73,6 +75,7 @@ public partial class MainWindow : Window
         UpdateGripLayout();
         RebuildButtons();
         _locator.TaskbarChanged += AttachAndPosition;
+        _locator.KeepOnTop += KeepAboveTaskbarXaml;
         _locator.ThemeChanged += OnSystemThemeChanged;
         _locator.Start();
         _placed = true;
@@ -106,10 +109,54 @@ public partial class MainWindow : Window
         protected override List<AutomationPeer> GetChildrenCore() => [];
     }
 
+    public void ApplySystemTheme() => OnSystemThemeChanged();
+
     private void OnSystemThemeChanged()
     {
         ApplyTheme(force: true);
-        RebuildButtons();
+        UpdateFolderButtonColors();
+    }
+
+    private void UpdateFolderButtonColors()
+    {
+        foreach (var child in FolderButtons.Children)
+        {
+            if (child is TextBlock empty)
+            {
+                empty.Foreground = _mutedForeground;
+                continue;
+            }
+
+            if (child is not System.Windows.Controls.Button button)
+                continue;
+
+            button.Foreground = _foreground;
+            if (button.Content is not StackPanel panel)
+                continue;
+
+            foreach (var part in panel.Children)
+            {
+                if (part is TextBlock text)
+                    text.Foreground = text.Text.Contains('»') ? _mutedForeground : _foreground;
+            }
+        }
+    }
+
+    public void ReattachToTaskbar()
+    {
+        _embedded = false;
+        StartEmbedRetry();
+        AttachAndPosition();
+    }
+
+    private void KeepAboveTaskbarXaml()
+    {
+        if (!_embedded)
+            return;
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == IntPtr.Zero)
+            return;
+        NativeMethods.BringAboveTaskbarXaml(hwnd);
     }
 
     protected override void OnClosed(EventArgs e)
@@ -118,7 +165,6 @@ public partial class MainWindow : Window
         if (_hwndSource != null && _wndHook != null)
             _hwndSource.RemoveHook(_wndHook);
         _locator.Stop();
-        NativeMethods.CleanupStaleRebarBands();
         base.OnClosed(e);
     }
 
@@ -335,7 +381,8 @@ public partial class MainWindow : Window
         ShowInTaskbar = false;
         Title = "";
         var tray = NativeMethods.GetTaskbarHwnd();
-        if (!_embedded || tray == IntPtr.Zero || NativeMethods.GetParent(hwnd) != tray)
+        var parent = NativeMethods.GetParent(hwnd);
+        if (!_embedded || tray == IntPtr.Zero || parent != tray)
         {
             _embedded = NativeMethods.IsTaskbarReady() && NativeMethods.TryEmbedInTaskbar(this);
             if (!_embedded)
@@ -347,19 +394,14 @@ public partial class MainWindow : Window
                 return;
             }
         }
-        else
-        {
-            NativeMethods.PrepareChildWindow(this);
-            NativeMethods.SetWindowText(hwnd, "");
-            NativeMethods.HideFromAppTaskbar(hwnd);
-            NativeMethods.HideOwnerFromTaskbar(hwnd);
-        }
 
         StopEmbedRetry();
         UpdateGripLayout();
         var widthPx = ResolveWidthPx();
         _currentWidthPx = widthPx;
         ApplyWindowSize(widthPx);
+        if (_config.ShowToolbar)
+            Visibility = Visibility.Visible;
     }
 
     private void StartEmbedRetry()
@@ -386,9 +428,7 @@ public partial class MainWindow : Window
 
         var slots = NativeMethods.GetTaskbarSlots();
         var heightPx = Math.Max(slots.TrayClient.Height, 40);
-        var trayLeft = TaskbarLayout.TryGetSystemTrayLeft(slots.TrayHwnd, out var uiaTrayLeft)
-            ? uiaTrayLeft
-            : slots.Notify?.Left ?? slots.TrayClient.Width;
+        var trayLeft = TaskbarLayout.GetSystemTrayLeft(slots);
         var maxWidth = Math.Max(MinWidthPx, trayLeft - 16);
         widthPx = Math.Clamp(widthPx, MinWidthPx, maxWidth);
         _currentWidthPx = widthPx;

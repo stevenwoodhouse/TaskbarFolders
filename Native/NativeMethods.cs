@@ -80,6 +80,7 @@ internal static class NativeMethods
     public const uint GwOwner = 4;
     public const uint GwChild = 5;
     public static readonly IntPtr HwndTop = IntPtr.Zero;
+    public static readonly IntPtr HwndMessage = new(-3);
 
     [DllImport("user32.dll", SetLastError = true)]
     public static extern int GetWindowLong(IntPtr hWnd, int nIndex);
@@ -217,8 +218,8 @@ internal static class NativeMethods
         var hwnd = helper.Handle;
 
         var style = GetWindowLong(hwnd, GwlStyle);
-        style |= WsChild | WsClipchildren | WsClipsiblings | WsVisible;
-        style &= ~(WsPopup | WsCaption | WsThickframe | WsBorder | WsDlgframe | WsSysmenu);
+        style |= WsChild | WsClipchildren | WsClipsiblings;
+        style &= ~(WsPopup | WsCaption | WsThickframe | WsBorder | WsDlgframe | WsSysmenu | WsVisible);
         SetWindowLong(hwnd, GwlStyle, style);
 
         var ex = GetWindowLong(hwnd, GwlExstyle);
@@ -328,7 +329,7 @@ internal static class NativeMethods
             return;
 
         SetWindowPos(hwnd, HwndTop, 0, 0, 0, 0,
-            SwpNomove | SwpNosize | SwpNoactivate | SwpShowwindow);
+            SwpNomove | SwpNosize | SwpNoactivate);
     }
 
     public static void HideFromAppTaskbar(IntPtr hwnd)
@@ -395,7 +396,6 @@ internal static class NativeMethods
             return 8;
 
         var notifyLeft = slots.Notify?.Left ?? slots.TrayClient.Width - 8;
-        var taskLeft = slots.Taskband?.Left ?? slots.Rebar?.Left ?? 55;
         const int pad = 8;
 
         // Dedicated strip immediately left of the system tray (classic toolbar side).
@@ -405,20 +405,13 @@ internal static class NativeMethods
         int taskRight;
         if (HasXamlTaskbar(slots.TrayHwnd))
         {
-            // Win11 XAML taskbar ignores ReBar size; shrinking it does not make a gap.
             taskRight = 55;
         }
         else
         {
-            var height = Math.Max(slots.TrayClient.Height, 40);
-            var minTaskWidth = 160;
-            var desiredTaskWidth = Math.Max(minTaskWidth, stripLeft - pad - taskLeft);
-            if (slots.TaskHwnd != IntPtr.Zero || slots.RebarHwnd != IntPtr.Zero)
-                ResizeTaskband(slots, desiredTaskWidth, height);
-
             slots = GetTaskbarSlots();
             notifyLeft = slots.Notify?.Left ?? notifyLeft;
-            taskRight = slots.Taskband?.Right ?? slots.Rebar?.Right ?? (taskLeft + desiredTaskWidth);
+            taskRight = slots.Taskband?.Right ?? slots.Rebar?.Right ?? 55;
             stripRight = notifyLeft - pad;
             stripLeft = Math.Max(taskRight + pad, stripRight - toolbarWidthPx);
         }
